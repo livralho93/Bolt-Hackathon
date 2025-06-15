@@ -1,21 +1,67 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Settings } from 'lucide-react'
 import { format } from 'date-fns'
 import { useTripStore } from '../stores/tripStore'
+import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
-import { Avatar } from '../components/ui/Avatar'
+import { TripTabs } from '../components/trip/TripTabs'
+import { ParticipantBubbles } from '../components/trip/ParticipantBubbles'
+import { CostSummary } from '../components/trip/CostSummary'
+import { InviteModal } from '../components/trip/InviteModal'
 
 export function TripDetailPage() {
   const { tripId } = useParams<{ tripId: string }>()
   const navigate = useNavigate()
-  const { currentTrip, loading, fetchTripDetails } = useTripStore()
+  const { user } = useAuthStore()
+  const { 
+    currentTrip, 
+    loading, 
+    fetchTripDetails, 
+    addLineItem, 
+    updateLineItem, 
+    deleteLineItem,
+    inviteParticipant,
+    calculateParticipantCosts 
+  } = useTripStore()
+  
+  const [showInviteModal, setShowInviteModal] = useState(false)
 
   useEffect(() => {
     if (tripId) {
       fetchTripDetails(tripId)
     }
   }, [tripId, fetchTripDetails])
+
+  const handleAddLineItem = async (lineItemData: any) => {
+    const result = await addLineItem(lineItemData)
+    if (result.error) {
+      console.error('Error adding line item:', result.error)
+    }
+  }
+
+  const handleUpdateLineItem = async (id: string, updates: any) => {
+    const result = await updateLineItem(id, updates)
+    if (result.error) {
+      console.error('Error updating line item:', result.error)
+    }
+  }
+
+  const handleDeleteLineItem = async (id: string) => {
+    const result = await deleteLineItem(id)
+    if (result.error) {
+      console.error('Error deleting line item:', result.error)
+    }
+  }
+
+  const handleInvite = async (email: string) => {
+    if (!tripId || !user) return
+    
+    const result = await inviteParticipant(tripId, email)
+    if (result.error) {
+      console.error('Error inviting participant:', result.error)
+    }
+  }
 
   if (loading) {
     return (
@@ -42,6 +88,8 @@ export function TripDetailPage() {
     )
   }
 
+  const userCosts = calculateParticipantCosts(currentTrip.id)
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
@@ -62,7 +110,7 @@ export function TripDetailPage() {
 
       {/* Trip Header */}
       <div className="bg-white rounded-xl shadow-soft border border-neutral-200 p-6 mb-8">
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-4 mb-6">
           <div className="w-16 h-16 bg-gradient-to-br from-primary-400 to-accent-400 rounded-xl flex items-center justify-center">
             <span className="text-2xl">🏔️</span>
           </div>
@@ -75,55 +123,38 @@ export function TripDetailPage() {
         </div>
 
         {/* Participants */}
-        <div className="flex items-center gap-3 mb-4">
-          {currentTrip.participants.map((participant) => (
-            <Avatar
-              key={participant.id}
-              src={participant.user?.avatarUrl}
-              name={participant.user?.fullName || participant.user?.email}
-              size="md"
-            />
-          ))}
-        </div>
-
-        {/* Cost Summary - Emily will implement */}
-        <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 text-center">
-          <div className="text-lg font-semibold text-primary-900">Your total: $0</div>
-          <div className="text-sm text-primary-700">Cost calculation coming soon</div>
-        </div>
+        <ParticipantBubbles
+          participants={currentTrip.participants}
+          onInvite={() => setShowInviteModal(true)}
+        />
       </div>
 
-      {/* Content Tabs - Avril will implement */}
-      <div className="bg-white rounded-xl shadow-soft border border-neutral-200">
-        <div className="border-b border-neutral-200">
-          <nav className="flex">
-            <button className="px-6 py-4 text-sm font-medium text-primary-600 border-b-2 border-primary-600">
-              Accommodations
-            </button>
-            <button className="px-6 py-4 text-sm font-medium text-neutral-500 hover:text-neutral-700">
-              Activities
-            </button>
-            <button className="px-6 py-4 text-sm font-medium text-neutral-500 hover:text-neutral-700">
-              Meals
-            </button>
-          </nav>
+      {/* Cost Summary */}
+      {user && (
+        <div className="mb-8">
+          <CostSummary
+            trip={currentTrip}
+            userCosts={userCosts}
+            currentUserId={user.id}
+          />
         </div>
-        
-        <div className="p-6">
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">🏠</span>
-            </div>
-            <h3 className="text-lg font-semibold text-neutral-900 mb-2">
-              No accommodations yet
-            </h3>
-            <p className="text-neutral-600 mb-4">
-              Add your first accommodation to get started
-            </p>
-            <Button>Add Accommodation</Button>
-          </div>
-        </div>
-      </div>
+      )}
+
+      {/* Content Tabs */}
+      <TripTabs
+        trip={currentTrip}
+        onAddLineItem={handleAddLineItem}
+        onUpdateLineItem={handleUpdateLineItem}
+        onDeleteLineItem={handleDeleteLineItem}
+      />
+
+      {/* Invite Modal */}
+      <InviteModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        trip={currentTrip}
+        onInvite={handleInvite}
+      />
     </div>
   )
 }
